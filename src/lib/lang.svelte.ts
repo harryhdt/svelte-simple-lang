@@ -14,7 +14,7 @@ type LocaleData = {
 	[key: string]: string | LocaleData;
 };
 
-export const createLang = <
+const createLang = <
 	Locales extends string,
 	Sources extends Record<Locales, (() => Promise<{ default: LocaleData }>) | LocaleData>
 >(props: {
@@ -129,3 +129,5 @@ export const createLang = <
 function getNested(obj: any, path: string) {
 	return path.split('.').reduce((o, p) => (o ? o[p] : undefined), obj);
 }
+
+export default createLang;
