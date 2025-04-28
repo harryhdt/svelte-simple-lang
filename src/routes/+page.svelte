@@ -17,10 +17,6 @@
 		await setLocale(newLocale);
 		localStorage.setItem('locale', newLocale);
 	};
-
-	$effect(() => {
-		console.log(getLocale());
-	});
 </script>
 
 <svelte:head>
@@ -169,6 +165,7 @@ id.json
 		padding: 10px;
 		border: 1px solid #ddd;
 		margin-bottom: 12px;
+		overflow: auto;
 	}
 	.inline-note {
 		display: inline-block;

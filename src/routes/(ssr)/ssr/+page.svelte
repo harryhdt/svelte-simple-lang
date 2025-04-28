@@ -14,7 +14,7 @@
 </script>
 
 <svelte:head>
-	<title>Lang: {getLocale()} | Svelte Simple Lang (SSR MODE)</title>
+	<title>Lang: {getLocale()} {t('world')} | Svelte Simple Lang (SSR MODE)</title>
 </svelte:head>
 
 <h1>Svelte Simple Lang (SSR MODE)</h1>
@@ -99,6 +99,7 @@ id.json
 		padding: 10px;
 		border: 1px solid #ddd;
 		margin-bottom: 12px;
+		overflow: auto;
 	}
 	.inline-note {
 		display: inline-block;
