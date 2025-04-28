@@ -1,0 +1,14 @@
+{
+	"world": "World",
+	"hello_{name}": "Hello {name}",
+	"you_have_{count}_apple": "You have {count} apple",
+	"you_have_{count}_apple_plural": "You have {count} apples",
+	"you_have_{count}_item": "You have {count} item",
+	"h": {
+		"w": "Hello World",
+		"c": {
+			"w": "Hello C.World"
+		},
+		"d_{x}": "Hello World {x}"
+	}
+}

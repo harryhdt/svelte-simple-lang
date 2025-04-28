@@ -1,0 +1,14 @@
+{
+	"world": "Dunia",
+	"hello_{name}": "Halo {name}",
+	"you_have_{count}_apple": "Kamu punya {count} apel",
+	"you_have_{count}_apple_plural": "Kamu punya {count} apel",
+	"you_have_{count}_item": "Kamu punya {count} item",
+	"h": {
+		"w": "Halo Dunia",
+		"c": {
+			"w": "Halo C.Dunia"
+		},
+		"d_{x}": "Halo Dunia {x}"
+	}
+}
