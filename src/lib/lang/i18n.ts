@@ -1,4 +1,4 @@
-import { createLang } from '$lib/lang.svelte.js';
+import createLang from '$lib/lang.svelte.js';
 import id from './id.json' with { type: 'json' };
 
 const i18n = createLang({
