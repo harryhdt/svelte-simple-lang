@@ -44,7 +44,10 @@ const createLang = <
 	async function loadLocale(l: Locales) {
 		if (loadedLocales.has(l)) return;
 		if (l === defaultLocale) return;
-		if (typeof sources[l] === 'object') return;
+		if (typeof sources[l] === 'object') {
+			loadedLocales.set(l, sources[l] as LocaleData);
+			return;
+		}
 		// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 		// @ts-ignore
 		const module = await sources[l]();
