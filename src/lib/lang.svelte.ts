@@ -40,6 +40,7 @@ const createLang = <
 	let defaultLocale = props.defaultLocale;
 	const loadedLocales = new Map<string, LocaleData>();
 	loadedLocales.set(defaultLocale, props.defaultSource);
+	let localeChangePromise: Promise<boolean> = Promise.resolve(true);
 
 	async function loadLocale(l: Locales): Promise<boolean> {
 		try {
@@ -65,36 +66,42 @@ const createLang = <
 		getLocale: () => locale as keyof typeof sources,
 
 		setLocale: async (l: keyof typeof sources) => {
-			if (l === undefined || l === null) return false;
-			if (!sources[l]) {
-				console.warn(`Locale "${l.toString()}" not found`);
-				return false;
-			}
-			const success = await loadLocale(l as Locales);
-			if (!success) return false;
-			locale = l as Locales;
-			return true;
+			return (localeChangePromise = localeChangePromise.then(async () => {
+				if (l === undefined || l === null) return false;
+				if (!sources[l]) {
+					console.warn(`Locale "${l.toString()}" not found`);
+					return false;
+				}
+				const success = await loadLocale(l as Locales);
+				if (!success) return false;
+				locale = l as Locales;
+				return true;
+			}));
 		},
 
 		resetLocale: async () => {
-			const success = await loadLocale(defaultLocale);
-			if (success) {
-				locale = defaultLocale;
-			}
-			return success;
+			return (localeChangePromise = localeChangePromise.then(async () => {
+				const success = await loadLocale(defaultLocale);
+				if (success) {
+					locale = defaultLocale;
+				}
+				return success;
+			}));
 		},
 
 		setDefaultLocale: async (l: keyof typeof sources) => {
-			if (l === undefined || l === null) return false;
-			if (!sources[l]) {
-				console.warn(`Locale "${l.toString()}" not found`);
-				return false;
-			}
-			const success = await loadLocale(l as Locales);
-			if (!success) return false;
-			locale = l as Locales;
-			defaultLocale = l as Locales;
-			return true;
+			return (localeChangePromise = localeChangePromise.then(async () => {
+				if (l === undefined || l === null) return false;
+				if (!sources[l]) {
+					console.warn(`Locale "${l.toString()}" not found`);
+					return false;
+				}
+				const success = await loadLocale(l as Locales);
+				if (!success) return false;
+				locale = l as Locales;
+				defaultLocale = l as Locales;
+				return true;
+			}));
 		},
 
 		t: <K extends ExtractKeys<Sources[Locales]>>(
@@ -111,12 +118,26 @@ const createLang = <
 
 			let actualKey = key as string;
 
-			// plural
-			if (params && 'count' in params && params?.count !== undefined && Number(params.count) > 1) {
-				const pluralKey = `${actualKey}_plural`;
-				if (getNested(data, pluralKey) !== undefined) {
-					actualKey = pluralKey;
+			// plural handling: support _zero, singular, and _plural forms
+			if (params && 'count' in params && params?.count !== undefined) {
+				const count = Number(params.count);
+				if (isNaN(count)) {
+					console.warn(`Invalid count parameter: ${params.count} (expected number)`);
+				} else if (count === 0) {
+					// Check for zero form first
+					const zeroKey = `${actualKey}_zero`;
+					if (getNested(data, zeroKey) !== undefined) {
+						actualKey = zeroKey;
+					}
+					// Otherwise falls back to singular form
+				} else if (count > 1) {
+					// Use plural form for count > 1
+					const pluralKey = `${actualKey}_plural`;
+					if (getNested(data, pluralKey) !== undefined) {
+						actualKey = pluralKey;
+					}
 				}
+				// For count === 1, uses singular form (actualKey unchanged)
 			}
 
 			const value = getNested(data, actualKey);
