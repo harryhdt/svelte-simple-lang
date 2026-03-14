@@ -39,8 +39,10 @@ const createLang = <
 	const sources = props.sources;
 	// Validate maxCachedLocales
 	if (props.maxCachedLocales !== undefined) {
-		if (!Number.isInteger(props.maxCachedLocales) || props.maxCachedLocales < 1) {
-			throw new Error('maxCachedLocales must be a positive integer (≥ 1)');
+		if (!Number.isInteger(props.maxCachedLocales) || props.maxCachedLocales < 2) {
+			throw new Error(
+				'maxCachedLocales must be at least 2 (one for default locale + at least one other locale)'
+			);
 		}
 	}
 	const maxCachedLocales = props.maxCachedLocales ?? 5; // Default to 5
