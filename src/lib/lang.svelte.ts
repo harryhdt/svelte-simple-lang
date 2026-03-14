@@ -21,6 +21,7 @@ const createLang = <
 	defaultLocale: Locales;
 	defaultSource: LocaleData;
 	sources: Sources;
+	maxCachedLocales?: number;
 }) => {
 	if (!props.defaultLocale) {
 		throw new Error('defaultLocale is required');
@@ -36,16 +37,34 @@ const createLang = <
 	}
 
 	const sources = props.sources;
+	const maxCachedLocales = props.maxCachedLocales ?? 5; // Default to 5
 	let locale = $state(props.defaultLocale);
 	let defaultLocale = props.defaultLocale;
 	const loadedLocales = new Map<string, LocaleData>();
 	loadedLocales.set(defaultLocale, props.defaultSource);
 	let localeChangePromise: Promise<boolean> = Promise.resolve(true);
 
+	// Helper: Evict oldest locale if cache is full (preserving defaultLocale)
+	function evictOldestLocaleIfNeeded(newLocale: Locales) {
+		if (loadedLocales.size >= maxCachedLocales && !loadedLocales.has(newLocale)) {
+			// Find the oldest (first) locale that isn't the default or the new one
+			for (const locale of loadedLocales.keys()) {
+				if (locale !== defaultLocale && locale !== newLocale) {
+					loadedLocales.delete(locale);
+					break; // Only evict one
+				}
+			}
+		}
+	}
+
 	async function loadLocale(l: Locales): Promise<boolean> {
 		try {
 			if (loadedLocales.has(l)) return true;
 			if (l === defaultLocale) return true;
+
+			// Evict oldest locale if cache is full
+			evictOldestLocaleIfNeeded(l);
+
 			if (typeof sources[l] === 'object') {
 				loadedLocales.set(l, sources[l] as LocaleData);
 				return true;
@@ -162,10 +181,7 @@ const createLang = <
 	};
 };
 
-function getNested(
-	obj: LocaleData | undefined,
-	path: string
-): string | LocaleData | undefined {
+function getNested(obj: LocaleData | undefined, path: string): string | LocaleData | undefined {
 	if (!obj) return undefined;
 	return path.split('.').reduce<string | LocaleData | undefined>((current, key) => {
 		if (typeof current === 'object' && current !== null && key in current) {
