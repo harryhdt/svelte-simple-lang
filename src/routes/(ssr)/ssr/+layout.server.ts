@@ -11,3 +11,6 @@ export const load: LayoutServerLoad = async ({ url }) => {
 		lang
 	};
 };
+
+export const ssr = true;
+export const prerender = false;

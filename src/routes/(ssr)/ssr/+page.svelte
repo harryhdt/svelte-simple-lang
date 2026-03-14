@@ -1,5 +1,11 @@
 <script lang="ts">
-	import { availableLocales, getLocale, setDefaultLocale, setLocale, t } from '$lib/lang/i18n.js';
+	import {
+		availableLocales,
+		getLocale,
+		setDefaultLocale,
+		setLocale,
+		t
+	} from '../../../local-lib/i18n.js';
 	import type { PageProps } from './$types.js';
 	const { data }: PageProps = $props();
 

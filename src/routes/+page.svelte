@@ -1,6 +1,12 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
-	import { availableLocales, getLocale, setDefaultLocale, setLocale, t } from '$lib/lang/i18n.js';
+	import {
+		availableLocales,
+		getLocale,
+		setDefaultLocale,
+		setLocale,
+		t
+	} from '../local-lib/i18n.js';
 
 	const setup = async () => {
 		await setDefaultLocale((localStorage.getItem('locale') as 'en' | 'id') || 'id');
