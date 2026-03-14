@@ -37,6 +37,12 @@ const createLang = <
 	}
 
 	const sources = props.sources;
+	// Validate maxCachedLocales
+	if (props.maxCachedLocales !== undefined) {
+		if (!Number.isInteger(props.maxCachedLocales) || props.maxCachedLocales < 1) {
+			throw new Error('maxCachedLocales must be a positive integer (≥ 1)');
+		}
+	}
 	const maxCachedLocales = props.maxCachedLocales ?? 5; // Default to 5
 	let locale = $state(props.defaultLocale);
 	let defaultLocale = props.defaultLocale;
@@ -48,9 +54,9 @@ const createLang = <
 	function evictOldestLocaleIfNeeded(newLocale: Locales) {
 		if (loadedLocales.size >= maxCachedLocales && !loadedLocales.has(newLocale)) {
 			// Find the oldest (first) locale that isn't the default or the new one
-			for (const locale of loadedLocales.keys()) {
-				if (locale !== defaultLocale && locale !== newLocale) {
-					loadedLocales.delete(locale);
+			for (const cachedLocale of loadedLocales.keys()) {
+				if (cachedLocale !== defaultLocale && cachedLocale !== newLocale) {
+					loadedLocales.delete(cachedLocale);
 					break; // Only evict one
 				}
 			}
@@ -85,42 +91,57 @@ const createLang = <
 		getLocale: () => locale as keyof typeof sources,
 
 		setLocale: async (l: keyof typeof sources) => {
-			return (localeChangePromise = localeChangePromise.then(async () => {
-				if (l === undefined || l === null) return false;
-				if (!sources[l]) {
-					console.warn(`Locale "${l.toString()}" not found`);
+			return (localeChangePromise = localeChangePromise
+				.then(async () => {
+					if (l === undefined || l === null) return false;
+					if (!sources[l]) {
+						console.warn(`Locale "${l.toString()}" not found`);
+						return false;
+					}
+					const success = await loadLocale(l as Locales);
+					if (!success) return false;
+					locale = l as Locales;
+					return true;
+				})
+				.catch((error) => {
+					console.error(`Unexpected error in setLocale:`, error);
 					return false;
-				}
-				const success = await loadLocale(l as Locales);
-				if (!success) return false;
-				locale = l as Locales;
-				return true;
-			}));
+				}));
 		},
 
 		resetLocale: async () => {
-			return (localeChangePromise = localeChangePromise.then(async () => {
-				const success = await loadLocale(defaultLocale);
-				if (success) {
-					locale = defaultLocale;
-				}
-				return success;
-			}));
+			return (localeChangePromise = localeChangePromise
+				.then(async () => {
+					const success = await loadLocale(defaultLocale);
+					if (success) {
+						locale = defaultLocale;
+					}
+					return success;
+				})
+				.catch((error) => {
+					console.error(`Unexpected error in resetLocale:`, error);
+					return false;
+				}));
 		},
 
 		setDefaultLocale: async (l: keyof typeof sources) => {
-			return (localeChangePromise = localeChangePromise.then(async () => {
-				if (l === undefined || l === null) return false;
-				if (!sources[l]) {
-					console.warn(`Locale "${l.toString()}" not found`);
+			return (localeChangePromise = localeChangePromise
+				.then(async () => {
+					if (l === undefined || l === null) return false;
+					if (!sources[l]) {
+						console.warn(`Locale "${l.toString()}" not found`);
+						return false;
+					}
+					const success = await loadLocale(l as Locales);
+					if (!success) return false;
+					locale = l as Locales;
+					defaultLocale = l as Locales;
+					return true;
+				})
+				.catch((error) => {
+					console.error(`Unexpected error in setDefaultLocale:`, error);
 					return false;
-				}
-				const success = await loadLocale(l as Locales);
-				if (!success) return false;
-				locale = l as Locales;
-				defaultLocale = l as Locales;
-				return true;
-			}));
+				}));
 		},
 
 		t: <K extends ExtractKeys<Sources[Locales]>>(
@@ -166,11 +187,22 @@ const createLang = <
 				return key as string;
 			}
 
-			let text = value as string;
+			// Ensure value is string, not nested object
+			if (typeof value !== 'string') {
+				console.warn(
+					`Translation value for key "${actualKey}" must be string, but got ${typeof value}. ` +
+						`Did you mean to access a nested key?`
+				);
+				return key as string;
+			}
+
+			let text = value;
 
 			if (params) {
 				for (const [paramKey, paramValue] of Object.entries(params)) {
-					text = text.replace(new RegExp(`{${paramKey}}`, 'g'), String(paramValue));
+					// Escape regex special characters in parameter name
+					const escapedKey = paramKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+					text = text.replace(new RegExp(`{${escapedKey}}`, 'g'), String(paramValue));
 				}
 			}
 
