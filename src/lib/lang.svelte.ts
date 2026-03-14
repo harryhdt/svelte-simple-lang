@@ -162,9 +162,17 @@ const createLang = <
 	};
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getNested(obj: any, path: string) {
-	return path.split('.').reduce((o, p) => (o ? o[p] : undefined), obj);
+function getNested(
+	obj: LocaleData | undefined,
+	path: string
+): string | LocaleData | undefined {
+	if (!obj) return undefined;
+	return path.split('.').reduce<string | LocaleData | undefined>((current, key) => {
+		if (typeof current === 'object' && current !== null && key in current) {
+			return current[key];
+		}
+		return undefined;
+	}, obj);
 }
 
 export default createLang;
