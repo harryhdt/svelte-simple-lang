@@ -4,15 +4,18 @@
 
 ## ✨ Features
 
-- 🛠 TypeScript Support — Enjoy smart autocompletion, type checking, and an overall smoother developer experience.
-- 📦 Lightweight and Fast — No heavy dependencies, providing a minimal footprint.
-- 🌍 Easy Language Switching — Seamless switching between languages with simple API calls.
-- 🧠 Full Type-Safety — Based on your JSON language files, ensuring a safe and predictable experience.
-- 🚨 Missing Key or Locale Warnings — Get notified if a key or locale is missing.
-- 🧩 Nested Translation Keys — Support for nested translation keys (e.g., menu.file.new).
-- 🔄 Lazy Loading — Language files are lazy-loaded when needed, reducing initial load time.
-- ⚖️ Pluralization Support — Automatically handles plural forms for keys (e.g., items vs items_plural).
-- 📝 Parameter Interpolation — Supports dynamic parameters in translations (e.g., Welcome, {name}).
+- 🛠 TypeScript Support — Full type safety with automatic key inference and parameter validation
+- 📦 Lightweight & Fast — Zero external dependencies, minimal footprint
+- 🌍 Easy Language Switching — Seamless switching with async/await, race-condition safe
+- 🔐 Full Type-Safety — Compile-time key and parameter checking from JSON files
+- 🚨 Missing Key Warnings — Gracefully handles missing keys with console notifications
+- 🧩 Nested Translation Keys — Hierarchical organization (e.g., menu.file.new)
+- 🔄 Lazy Loading — Load locales on-demand, reduce bundle size
+- ⚖️ Advanced Pluralization — Support for \_zero, singular, and \_plural forms
+- 📝 Parameter Interpolation — Dynamic content with automatic regex escape handling
+- 💾 Smart Caching — LRU cache with configurable size, prevents memory leaks
+- 🛡️ Production-Ready — Comprehensive error handling, validation, and edge case protection
+- 🚦 Race Condition Safe — Promise queue prevents concurrent locale change conflicts
 
 ## 📦 Installation
 
@@ -24,135 +27,168 @@ npm install svelte-simple-lang
 
 When using `createLang()` you need to provide:
 
-| Property        | Type                            | Description                                                  |
-| --------------- | ------------------------------- | ------------------------------------------------------------ |
-| `defaultLocale` | `string`                        | The default language to use.                                 |
-| `defaultSource` | `Promise<JSON>`                 | The source for the default language.                         |
-| `sources`       | `Record<string, Promise<JSON>>` | Object (imported json) containing all language dictionaries. |
+| Property           | Type     | Required | Description                                           |
+| ------------------ | -------- | -------- | ----------------------------------------------------- |
+| `defaultLocale`    | `string` | ✅ Yes   | The default language to use at startup                |
+| `defaultSource`    | `object` | ✅ Yes   | Language data for the default locale (eager loaded)   |
+| `sources`          | `object` | ✅ Yes   | Map of locale to language data (eager or lazy-loaded) |
+| `maxCachedLocales` | `number` | ❌ No    | Max concurrent locales in memory (default: 5, min: 2) |
 
 ```typescript
-// i18n.ts
-import { createLang } from '../index.js';
+// src/lib/lang/i18n.ts
+import createLang from 'svelte-simple-lang';
 import id from './id.json' with { type: 'json' };
 
 const i18n = createLang({
+	// Required: default locale and its data (must be eagerly loaded)
 	defaultLocale: 'id',
 	defaultSource: id,
+
+	// Required: all available locales (can be eager or lazy-loaded)
 	sources: {
 		id: id,
-		en: () => import('./en.json') // optional lazy load
-	}
+		en: () => import('./en.json')
+	},
+
+	// Optional: configure cache size (default: 5, min: 2)
+	maxCachedLocales: 5
 });
 
 export const { availableLocales, getLocale, resetLocale, setLocale, setDefaultLocale, t } = i18n;
 export default i18n;
 ```
 
-## 🛠️ API
+## 🛠️ API Reference
 
-You can use object spread `const { t, setLocale, ... } = ...` or a single variable `const i18n = ...` for this.
+| Function                   | Returns            | Description                                               |
+| -------------------------- | ------------------ | --------------------------------------------------------- |
+| `t(key, params)`           | `string`           | Translate a key with optional parameters                  |
+| `setLocale(locale)`        | `Promise<boolean>` | Switch to locale (async, returns success status)          |
+| `getLocale()`              | `string`           | Get currently active locale                               |
+| `resetLocale()`            | `Promise<boolean>` | Reset to default locale (async, returns success status)   |
+| `setDefaultLocale(locale)` | `Promise<boolean>` | Set as default and switch (async, returns success status) |
+| `availableLocales`         | `string[]`         | Array of all available locale codes                       |
 
-| Function                           | Description                                        |
-| ---------------------------------- | -------------------------------------------------- |
-| `t(key): string`                   | Translates a given key based on the active locale. |
-| `async` `setLocale(locale)`        | Changes the active locale                          |
-| `getLocale(): string`              | Returns the currently active locale.               |
-| `async` `resetLocale()`            | Resets to the default locale.                      |
-| `async` `setDefaultLocale(locale)` | Set default locale                                 |
-| `availableLocales`                 | Returns an array of all available locales.         |
+**All async methods return `Promise<boolean>`:**
 
-## 🧩 Example of Language Files
+- `true` = successfully completed
+- `false` = failed (error logged to console)
 
-```
-en.json
+## 🧩 Language Files
+
+**en.json**
+
+```json
 {
 	"world": "World",
 	"hello_{name}": "Hello {name}",
 	"you_have_{count}_apple": "You have {count} apple",
 	"you_have_{count}_apple_plural": "You have {count} apples",
-	"you_have_{count}_item": "You have {count} item"
+	"you_have_{count}_apple_zero": "You have no apples",
+	"menu": {
+		"home": "Home",
+		"about": "About"
+	}
 }
+```
 
-id.json
+**id.json**
+
+```json
 {
 	"world": "Dunia",
 	"hello_{name}": "Halo {name}",
 	"you_have_{count}_apple": "Kamu punya {count} apel",
 	"you_have_{count}_apple_plural": "Kamu punya {count} apel",
-	"you_have_{count}_item": "Kamu punya {count} item"
+	"you_have_{count}_apple_zero": "Kamu tidak punya apel",
+	"menu": {
+		"home": "Beranda",
+		"about": "Tentang"
+	}
 }
 ```
 
-## 🚀 Usage
+**Key Features:**
 
-### No SSR
+- Nested Keys: use dot notation (e.g., `t('menu.home')`)
+- Parameters: use `{paramName}` syntax
+- Pluralization: `_plural` for count > 1, `_zero` for count === 0
+
+## 🚀 Quick Start
+
+### Client-Side (Browser)
 
 ```svelte
 <script lang="ts">
 	import { browser } from '$app/environment';
-	import { availableLocales, getLocale, setDefaultLocale, setLocale, t } from '$lib/lang/i18n.js';
+	import { setDefaultLocale, setLocale, getLocale, t, availableLocales } from '$lib/lang/i18n';
 
-	const setup = async () => {
-		await setDefaultLocale((localStorage.getItem('locale') as 'en' | 'id') || 'id');
+	// Initialize saved locale preference
+	const initLocale = async () => {
+		const saved = (localStorage.getItem('locale') as 'en' | 'id') ?? 'id';
+		await setDefaultLocale(saved);
 	};
 
-	// Sveltekit wait for browser environment, or you can use export const prerender = false
 	if (browser) {
-		setup();
+		initLocale();
 	}
 
-	const toggleLocale = async () => {
-		const locale = getLocale();
-		const newLocale = locale === 'en' ? 'id' : 'en';
-		await setLocale(newLocale);
-		localStorage.setItem('locale', newLocale);
+	const changeLanguage = async (newLocale: string) => {
+		const success = await setLocale(newLocale);
+		if (success) {
+			localStorage.setItem('locale', newLocale);
+		}
 	};
 </script>
 
-<p>{t('world')}</p>
+<h1>{t('world')}</h1>
+<p>Count: {t('you_have_{count}_apple', { count: 5 })}</p>
+
+{#each availableLocales as locale}
+	<button on:click={() => changeLanguage(locale)}>{locale}</button>
+{/each}
 ```
 
-[Check full example](https://svelte-simple-lang.harryhdt.dev)
-
-### SSR
+### Server-Side (SSR)
 
 ```typescript
-// +layout.server.ts
-import type { LayoutServerLoad } from './$types.js';
-export const load: LayoutServerLoad = async ({ url }) => {
-	const params = url.searchParams; // for handle url.com/ssr?lang=en
-	const paramsLang = params.get('lang') || '';
-	// Generate randomly (in a real app, you might use a database to store the locale for each user)
-	const lang = (
-		['id', 'en'].includes(paramsLang) ? paramsLang : Math.random() > 0.5 ? 'id' : 'en'
-	) as 'id' | 'en';
-	return {
-		lang
-	};
+// src/hooks.server.ts
+import { setDefaultLocale } from '$lib/lang/i18n';
+import type { Handle } from '@sveltejs/kit';
+
+export const handle: Handle = async ({ event, resolve }) => {
+	const userLocale = (event.cookies.get('lang') as 'en' | 'id') ?? 'id';
+	await setDefaultLocale(userLocale);
+	return resolve(event);
 };
 ```
 
-```svelte
-<!-- +page.svelte -->
-<script lang="ts">
-	import { availableLocales, getLocale, setDefaultLocale, setLocale, t } from '$lib/lang/i18n.js';
-	import type { PageProps } from './$types.js';
-	const { data }: PageProps = $props();
+## 📚 Complete Documentation
 
-	setDefaultLocale(data.lang);
+For advanced usage, error handling, best practices, caching strategies, and more:
 
-	const toggleLocale = () => {
-		const locale = getLocale();
-		const newLocale = locale === 'en' ? 'id' : 'en';
-		setLocale(newLocale);
-		// hit api for change user language in database
-	};
-</script>
-
-<p>{t('world')}</p>
-```
+**→ See [USAGE.md](./USAGE.md) for full documentation**
 
 [Check full example](https://svelte-simple-lang.harryhdt.dev)
+
+## 🎯 Production Features
+
+Built for enterprise reliability:
+
+- ✅ Enhanced pluralization with `_zero`, singular, and `_plural` forms
+- ✅ Configurable cache size with LRU eviction
+- ✅ Promise queue prevents race conditions
+- ✅ All async methods return `Promise<boolean>` for error detection
+- ✅ Comprehensive error handling and validation
+- ✅ Type-safe with no `any` types
+- ✅ Special character escaping in parameters
+- ✅ Memory-safe with bounded cache limits
+
+## 🔗 Resources
+
+- 📖 [Complete Usage Guide](./USAGE.md) - Detailed API and patterns
+- 📋 [Changelog](./CHANGELOG.md) - Version history and improvements
+- 🎨 [Live Demo](https://svelte-simple-lang.harryhdt.dev) - Interactive examples
 
 ## License
 
