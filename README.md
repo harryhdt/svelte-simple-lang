@@ -152,15 +152,43 @@ export default i18n;
 ### Server-Side (SSR)
 
 ```typescript
-// src/hooks.server.ts
-import { setDefaultLocale } from '$lib/lang/i18n';
-import type { Handle } from '@sveltejs/kit';
+// src/routes/+layout.server.ts
+import type { LayoutServerLoad } from './$types.js';
 
-export const handle: Handle = async ({ event, resolve }) => {
-	const userLocale = (event.cookies.get('lang') as 'en' | 'id') ?? 'id';
-	await setDefaultLocale(userLocale);
-	return resolve(event);
+export const load: LayoutServerLoad = async ({ url, cookies }) => {
+	// Determine locale: from query param, cookie, or default
+	let lang = (url.searchParams.get('lang') ?? cookies.get('lang') ?? 'id') as 'en' | 'id';
+
+	// Validate locale
+	if (!['id', 'en'].includes(lang)) {
+		lang = 'id'; // fallback
+	}
+
+	return { lang };
 };
+```
+
+```svelte
+<!-- src/routes/+page.svelte -->
+<script lang="ts">
+	import { setDefaultLocale, setLocale, getLocale, t } from '$lib/lang/i18n';
+	const { data } = $props();
+
+	// Set locale from server
+	setDefaultLocale(data.lang);
+
+	const changeLanguage = async (newLocale: string) => {
+		const success = await setLocale(newLocale);
+		if (success) {
+			// Optional: save to database or cookies
+		}
+	};
+</script>
+
+<h1>{t('world')}</h1>
+<button on:click={() => changeLanguage(getLocale() === 'en' ? 'id' : 'en')}>
+	Change Language
+</button>
 ```
 
 ## 📚 Complete Documentation

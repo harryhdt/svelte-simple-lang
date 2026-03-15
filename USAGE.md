@@ -379,38 +379,35 @@ Use `localStorage` to persist language preference:
 
 ### Pattern 2: Server-Side Rendering (SSR)
 
-Set locale in server hooks based on user preferences or headers:
-
-**src/hooks.server.ts**
-
-```typescript
-import { setDefaultLocale } from '$lib/lang/i18n';
-import type { Handle } from '@sveltejs/kit';
-
-export const handle: Handle = async ({ event, resolve }) => {
-	// Option 1: Read from cookies
-	const locale = (event.cookies.get('lang') as 'en' | 'id') || 'id';
-
-	// Option 2: Parse Accept-Language header
-	// const acceptLanguage = event.request.headers.get('accept-language');
-	// const locale = acceptLanguage?.split(',')[0].split('-')[0];
-
-	// Set as default before rendering
-	await setDefaultLocale(locale);
-
-	return resolve(event);
-};
-```
+Determine locale in a layout server file, then set it in the page component:
 
 **src/routes/(ssr)/ssr/+layout.server.ts**
 
 ```typescript
-import { getLocale } from '$lib/lang/i18n';
-import type { LayoutServerLoad } from './$types';
+import type { LayoutServerLoad } from './$types.js';
 
-export const load: LayoutServerLoad = () => {
+export const load: LayoutServerLoad = async ({ url }) => {
+	const params = url.searchParams;
+	const paramsLang = params.get('lang') || '';
+
+	// Determine locale from query param, cookies, or header
+	// Option 1: From query parameter
+	let locale = (paramsLang as 'en' | 'id') || null;
+
+	// Option 2: From cookies (if paramsLang not provided)
+	// const locale = (cookies.get('lang') as 'en' | 'id') || 'id';
+
+	// Option 3: From Accept-Language header
+	// const acceptLanguage = request.headers.get('accept-language');
+	// const locale = acceptLanguage?.split(',')[0].split('-')[0];
+
+	// Fallback to default
+	if (!['id', 'en'].includes(locale || '')) {
+		locale = 'id';
+	}
+
 	return {
-		lang: getLocale()
+		lang: locale as 'id' | 'en'
 	};
 };
 ```
@@ -419,22 +416,38 @@ export const load: LayoutServerLoad = () => {
 
 ```svelte
 <script lang="ts">
-	import { setLocale, getLocale, t } from '$lib/lang/i18n';
-	import type { PageProps } from './$types';
+	import { setDefaultLocale, setLocale, getLocale, t, availableLocales } from '$lib/lang/i18n';
+	import type { PageProps } from './$types.js';
 
 	const { data }: PageProps = $props();
 
+	// Set locale from server-provided data before rendering (SSR)
+	setDefaultLocale(data.lang);
+
 	const toggleLocale = async () => {
-		const newLocale = getLocale() === 'en' ? 'id' : 'en';
+		const locale = getLocale();
+		const newLocale = locale === 'en' ? 'id' : 'en';
 		await setLocale(newLocale);
 		// Optionally: call API to save preference to database
 	};
 </script>
 
+<svelte:head>
+	<title>Lang: {getLocale()} {t('world')} | Svelte Simple Lang</title>
+</svelte:head>
+
 <h1>{t('world')}</h1>
-<p>Current language: {data.lang}</p>
+<p>Your language: {getLocale()}</p>
 <button on:click={toggleLocale}>Change Language</button>
 ```
+
+**Why this approach?**
+
+- ✅ No global hooks needed
+- ✅ Locale determined per-route
+- ✅ Server renders with correct locale
+- ✅ Simple and scoped to layout
+- ✅ Easy to test in isolation
 
 ### Pattern 3: Reactive Language Switching
 
@@ -937,7 +950,7 @@ const updateUserLanguage = async (userId: string, locale: string) => {
 Store language preference in user settings with error handling:
 
 ```typescript
-// In server hook or API route
+// In API route or server action
 const updateUserLanguage = async (userId: string, locale: string) => {
 	try {
 		await db.user.update({
@@ -952,26 +965,45 @@ const updateUserLanguage = async (userId: string, locale: string) => {
 };
 ```
 
-Also handle locale initialization in hooks:
+Handle locale initialization in layout.server.ts:
 
 ```typescript
-// src/hooks.server.ts
-import { setDefaultLocale } from '$lib/lang/i18n';
-import type { Handle } from '@sveltejs/kit';
+// src/routes/+layout.server.ts
+import type { LayoutServerLoad } from './$types.js';
 
-export const handle: Handle = async ({ event, resolve }) => {
-	// Get user's preferred locale from database or cookie
-	const userLocale = (await event.locals.getUserLocale?.()) ?? 'en';
+export const load: LayoutServerLoad = async ({ cookies, locals, url }) => {
+	// Get user's preferred locale from multiple sources
+	let locale = (url.searchParams.get('lang') ?? // Query param takes priority
+		cookies.get('lang') ?? // Then cookie
+		(await locals.getUserLocale?.()) ?? // Then user DB
+		'en') as 'en' | 'id'; // Otherwise default
 
-	// Set as default before rendering
-	const success = await setDefaultLocale(userLocale);
-
-	if (!success) {
-		console.warn(`Failed to set locale to ${userLocale}, using default`);
-	}
-
-	return resolve(event);
+	return { lang: locale };
 };
+```
+
+Then in your component:
+
+```svelte
+<!-- src/routes/+page.svelte -->
+<script lang="ts">
+	import { setDefaultLocale, setLocale, getLocale, t } from '$lib/lang/i18n';
+	const { data } = $props();
+
+	// Set locale before rendering
+	setDefaultLocale(data.lang);
+
+	const handleChange = async (newLocale: string) => {
+		const success = await setLocale(newLocale);
+		if (success) {
+			// Save to database or cookies
+			await fetch('/api/locale', {
+				method: 'POST',
+				body: JSON.stringify({ locale: newLocale })
+			});
+		}
+	};
+</script>
 ```
 
 ### 4. Avoid Duplicate Translations
