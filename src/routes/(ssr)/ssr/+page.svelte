@@ -11,10 +11,10 @@
 
 	setDefaultLocale(data.lang);
 
-	const toggleLocale = () => {
+	const toggleLocale = async () => {
 		const locale = getLocale();
 		const newLocale = locale === 'en' ? 'id' : 'en';
-		setLocale(newLocale);
+		await setLocale(newLocale);
 		// hit api for change user language in database
 	};
 </script>
@@ -36,17 +36,21 @@
 
 <div class="block">
 	<pre>{@html `
-// src/hooks.server.ts
-import { setDefaultLocale } from '$lib/lang/i18n.js';
-import type { Handle } from '@sveltejs/kit';
+// src/routes/layout.server.ts
+import type { LayoutServerLoad } from './$types.js';
 
-export const handle: Handle = async ({ event, resolve }) => {
-	// const lang = event.request.headers.get('accept-language')?.split(',')[0];
-	// random generate for simulate ssr mode locale
-	const lang = (Math.random() > 0.5 ? 'id' : 'en') as 'id' | 'en';
-	console.log(lang);
-	setDefaultLocale(lang);
-	return resolve(event);
+export const load: LayoutServerLoad = async ({ url }) => {
+	const params = url.searchParams;
+	const paramsLang = params.get('lang') || '';
+
+	// Generate randomly (in a real app, you might use a database to store the locale for each user)
+	const lang = (
+		['id', 'en'].includes(paramsLang) ? paramsLang : Math.random() > 0.5 ? 'id' : 'en'
+	) as 'id' | 'en';
+
+	return {
+		lang
+	};
 };
 
 	`}</pre>
@@ -55,12 +59,17 @@ export const handle: Handle = async ({ event, resolve }) => {
 <div class="block">
 	<pre>{@html `
 // +page.svelte
-import { availableLocales, getLocale, setLocale, t } from '$lib/lang/i18n.js';
+import { availableLocales, getLocale, setLocale, setDefaultLocale, t } from '$lib/lang/i18n.js';
+import type { PageProps } from './$types.js';
 
-const toggleLocale = () => {
+const { data }: PageProps = $props();
+
+setDefaultLocale(lang);
+
+const toggleLocale = async () => {
 	const locale = getLocale();
 	const newLocale = locale === 'en' ? 'id' : 'en';
-	setLocale(newLocale);
+	await setLocale(newLocale);
 	// hit api for change user language in database
 };
 	`}</pre>

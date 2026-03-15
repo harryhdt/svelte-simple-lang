@@ -52,10 +52,10 @@ if (browser) {
   setDefaultLocale((localStorage.getItem('locale') as 'en' | 'id') || 'id');
 }
 
-const toggleLocale = () => {
+const toggleLocale = async () => {
   const locale = getLocale();
   const newLocale = locale === 'en' ? 'id' : 'en';
-  setLocale(newLocale);
+  await setLocale(newLocale);
   localStorage.setItem('locale', newLocale);
 };
     `}
