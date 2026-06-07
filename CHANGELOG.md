@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.5] - 2026-06-07
+
+> **Note:** This release contains internal TypeScript and declaration-emit fixes and a cache eviction improvement. There are no breaking changes to the runtime API or public usage patterns.
+
+### 🐛 Bug Fixes & Improvements
+
+- **TS5088 Serialization Fix**: Reduced TypeScript declaration complexity by introducing named type aliases for `t()` and the `LangInstance` surface, preventing cyclic / non-serializable inferred types on exported `createLang()` singletons
+- **Declaration Emit Stability**: Reworked the internal `t` implementation to use a named `TranslationFn` alias and explicit object typing, improving `.d.ts` generation for large locale schemas
+- **Production DX**: Improved IntelliSense and type-checking stability for apps that export `i18n` instances from dedicated modules
+- **True LRU Cache Eviction**: Fixed cache eviction from FIFO to genuine LRU (Least Recently Used) behavior — locale cache order is now refreshed on access via `loadLocale()`, ensuring eviction reflects actual usage patterns instead of insertion order
+
+### 🔄 Internal Implementation
+
+- **Named Translation Type**: Extracted `TranslationParams<Key>` and `TranslationFn<Source>` to keep the public type graph more serializable
+- **Explicit API Surface**: Kept `createLang()` returning an explicit `LangInstance<...>` to avoid relying on inferred object-literal types
+
 ## [0.0.4] - 2026-03-15
 
 ### 🐛 Bug Fixes & Improvements
