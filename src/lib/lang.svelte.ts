@@ -88,7 +88,12 @@ function createLang<
 
 	async function loadLocale(l: Extract<keyof Sources, string>): Promise<boolean> {
 		try {
-			if (loadedLocales.has(l)) return true;
+			if (loadedLocales.has(l)) {
+				const data = loadedLocales.get(l)!;
+				loadedLocales.delete(l);
+				loadedLocales.set(l, data); // LRU: move to end
+				return true;
+			}
 			if (l === defaultLocale) return true;
 
 			// Evict oldest locale if cache is full
