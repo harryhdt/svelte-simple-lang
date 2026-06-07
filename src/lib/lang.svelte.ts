@@ -13,16 +13,37 @@ type ExtractParams<T extends string> = T extends `${string}{${infer Param}}${inf
 type LocaleData = {
 	[key: string]: string | LocaleData;
 };
+type LocaleLoader<Source extends LocaleData> = () => Promise<{ default: Source }>;
+type LocaleSource<Source extends LocaleData> = Source | LocaleLoader<Source>;
 
-const createLang = <
-	Locales extends string,
-	Sources extends Record<Locales, (() => Promise<{ default: LocaleData }>) | LocaleData>
->(props: {
-	defaultLocale: Locales;
-	defaultSource: LocaleData;
+type TranslationParams<Key extends string> =
+	ExtractParams<Key> extends never ? undefined : { [P in ExtractParams<Key>]: string | number };
+
+export type TranslationFn<Source extends LocaleData> = <K extends ExtractKeys<Source>>(
+	key: K,
+	params?: TranslationParams<K>
+) => string;
+
+export type LangInstance<Locales extends string, Source extends LocaleData> = {
+	getLocale: () => Locales;
+	setLocale: (l: Locales) => Promise<boolean>;
+	resetLocale: () => Promise<boolean>;
+	setDefaultLocale: (l: Locales) => Promise<boolean>;
+	t: TranslationFn<Source>;
+	availableLocales: Locales[];
+};
+
+type LangProps<Source extends LocaleData, Sources extends Record<string, LocaleSource<Source>>> = {
+	defaultLocale: Extract<keyof Sources, string>;
+	defaultSource: Source;
 	sources: Sources;
 	maxCachedLocales?: number;
-}) => {
+};
+
+function createLang<
+	Source extends LocaleData,
+	Sources extends Record<string, LocaleSource<Source>>
+>(props: LangProps<Source, Sources>): LangInstance<Extract<keyof Sources, string>, Source> {
 	if (!props.defaultLocale) {
 		throw new Error('defaultLocale is required');
 	}
@@ -48,12 +69,12 @@ const createLang = <
 	const maxCachedLocales = props.maxCachedLocales ?? 5; // Default to 5
 	let locale = $state(props.defaultLocale);
 	let defaultLocale = props.defaultLocale;
-	const loadedLocales = new Map<string, LocaleData>();
+	const loadedLocales = new Map<Extract<keyof Sources, string>, Source>();
 	loadedLocales.set(defaultLocale, props.defaultSource);
 	let localeChangePromise: Promise<boolean> = Promise.resolve(true);
 
 	// Helper: Evict oldest locale if cache is full (preserving defaultLocale)
-	function evictOldestLocaleIfNeeded(newLocale: Locales) {
+	function evictOldestLocaleIfNeeded(newLocale: Extract<keyof Sources, string>) {
 		if (loadedLocales.size >= maxCachedLocales && !loadedLocales.has(newLocale)) {
 			// Find the oldest (first) locale that isn't the default or the new one
 			for (const cachedLocale of loadedLocales.keys()) {
@@ -65,7 +86,7 @@ const createLang = <
 		}
 	}
 
-	async function loadLocale(l: Locales): Promise<boolean> {
+	async function loadLocale(l: Extract<keyof Sources, string>): Promise<boolean> {
 		try {
 			if (loadedLocales.has(l)) return true;
 			if (l === defaultLocale) return true;
@@ -73,15 +94,14 @@ const createLang = <
 			// Evict oldest locale if cache is full
 			evictOldestLocaleIfNeeded(l);
 
-			if (typeof sources[l] === 'object') {
-				loadedLocales.set(l, sources[l] as LocaleData);
+			const source = sources[l];
+			if (typeof source === 'object') {
+				loadedLocales.set(l, source as Source);
 				return true;
 			}
-			// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-			// @ts-ignore
-			const module = await sources[l]();
+			const module = await source();
 			const data = 'default' in module ? module.default : module;
-			loadedLocales.set(l, data as Record<string, string>);
+			loadedLocales.set(l, data as Source);
 			return true;
 		} catch (error) {
 			console.error(`Failed to load locale "${l}":`, error);
@@ -89,20 +109,80 @@ const createLang = <
 		}
 	}
 
-	return {
-		getLocale: () => locale as keyof typeof sources,
+	const t: TranslationFn<Source> = (key, params) => {
+		const data = loadedLocales.get(locale);
+		if (!data) {
+			console.warn(`Locale "${locale}" not loaded`);
+			return key as string;
+		}
 
-		setLocale: async (l: keyof typeof sources) => {
+		let actualKey = key as string;
+
+		// plural handling: support _zero, singular, and _plural forms
+		if (params && 'count' in params && params?.count !== undefined) {
+			const count = Number(params.count);
+			if (isNaN(count)) {
+				console.warn(`Invalid count parameter: ${params.count} (expected number)`);
+			} else if (count === 0) {
+				// Check for zero form first
+				const zeroKey = `${actualKey}_zero`;
+				if (getNested(data, zeroKey) !== undefined) {
+					actualKey = zeroKey;
+				}
+				// Otherwise falls back to singular form
+			} else if (count > 1) {
+				// Use plural form for count > 1
+				const pluralKey = `${actualKey}_plural`;
+				if (getNested(data, pluralKey) !== undefined) {
+					actualKey = pluralKey;
+				}
+			}
+			// For count === 1, uses singular form (actualKey unchanged)
+		}
+
+		const value = getNested(data, actualKey);
+
+		if (value === undefined) {
+			console.warn(`Key "${actualKey}" not found in locale ${locale}`);
+			return key as string;
+		}
+
+		// Ensure value is string, not nested object
+		if (typeof value !== 'string') {
+			console.warn(
+				`Translation value for key "${actualKey}" must be string, but got ${typeof value}. ` +
+					`Did you mean to access a nested key?`
+			);
+			return key as string;
+		}
+
+		let text = value;
+
+		if (params) {
+			for (const [paramKey, paramValue] of Object.entries(params)) {
+				// Escape regex special characters in parameter name
+				const escapedKey = paramKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+				text = text.replace(new RegExp(`{${escapedKey}}`, 'g'), String(paramValue));
+			}
+		}
+
+		return text;
+	};
+
+	const api: LangInstance<Extract<keyof Sources, string>, Source> = {
+		getLocale: () => locale,
+
+		setLocale: async (l: Extract<keyof Sources, string>) => {
 			return (localeChangePromise = localeChangePromise
 				.then(async () => {
 					if (l === undefined || l === null) return false;
-					if (!sources[l]) {
+					if (!(l in sources)) {
 						console.warn(`Locale "${l.toString()}" not found`);
 						return false;
 					}
-					const success = await loadLocale(l as Locales);
+					const success = await loadLocale(l);
 					if (!success) return false;
-					locale = l as Locales;
+					locale = l;
 					return true;
 				})
 				.catch((error) => {
@@ -126,18 +206,18 @@ const createLang = <
 				}));
 		},
 
-		setDefaultLocale: async (l: keyof typeof sources) => {
+		setDefaultLocale: async (l: Extract<keyof Sources, string>) => {
 			return (localeChangePromise = localeChangePromise
 				.then(async () => {
 					if (l === undefined || l === null) return false;
-					if (!sources[l]) {
+					if (!(l in sources)) {
 						console.warn(`Locale "${l.toString()}" not found`);
 						return false;
 					}
-					const success = await loadLocale(l as Locales);
+					const success = await loadLocale(l);
 					if (!success) return false;
-					locale = l as Locales;
-					defaultLocale = l as Locales;
+					locale = l;
+					defaultLocale = l;
 					return true;
 				})
 				.catch((error) => {
@@ -146,74 +226,13 @@ const createLang = <
 				}));
 		},
 
-		t: <K extends ExtractKeys<Sources[Locales]>>(
-			key: K,
-			params?: ExtractParams<K> extends never
-				? undefined
-				: { [P in ExtractParams<K>]: string | number }
-		): string => {
-			const data = loadedLocales.get(locale);
-			if (!data) {
-				console.warn(`Locale "${locale}" not loaded`);
-				return key as string;
-			}
+		t,
 
-			let actualKey = key as string;
-
-			// plural handling: support _zero, singular, and _plural forms
-			if (params && 'count' in params && params?.count !== undefined) {
-				const count = Number(params.count);
-				if (isNaN(count)) {
-					console.warn(`Invalid count parameter: ${params.count} (expected number)`);
-				} else if (count === 0) {
-					// Check for zero form first
-					const zeroKey = `${actualKey}_zero`;
-					if (getNested(data, zeroKey) !== undefined) {
-						actualKey = zeroKey;
-					}
-					// Otherwise falls back to singular form
-				} else if (count > 1) {
-					// Use plural form for count > 1
-					const pluralKey = `${actualKey}_plural`;
-					if (getNested(data, pluralKey) !== undefined) {
-						actualKey = pluralKey;
-					}
-				}
-				// For count === 1, uses singular form (actualKey unchanged)
-			}
-
-			const value = getNested(data, actualKey);
-
-			if (value === undefined) {
-				console.warn(`Key "${actualKey}" not found in locale ${locale}`);
-				return key as string;
-			}
-
-			// Ensure value is string, not nested object
-			if (typeof value !== 'string') {
-				console.warn(
-					`Translation value for key "${actualKey}" must be string, but got ${typeof value}. ` +
-						`Did you mean to access a nested key?`
-				);
-				return key as string;
-			}
-
-			let text = value;
-
-			if (params) {
-				for (const [paramKey, paramValue] of Object.entries(params)) {
-					// Escape regex special characters in parameter name
-					const escapedKey = paramKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-					text = text.replace(new RegExp(`{${escapedKey}}`, 'g'), String(paramValue));
-				}
-			}
-
-			return text;
-		},
-
-		availableLocales: Object.keys(sources) as (keyof typeof sources)[]
+		availableLocales: Object.keys(sources) as Extract<keyof Sources, string>[]
 	};
-};
+
+	return api;
+}
 
 function getNested(obj: LocaleData | undefined, path: string): string | LocaleData | undefined {
 	if (!obj) return undefined;
