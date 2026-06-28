@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.6] - 2026-06-28
+
+> **Note:** This is a targeted TypeScript type-export fix. No runtime changes, no breaking changes.
+
+### 🐛 Bug Fixes
+
+- **TypeScript ts(2883) Fix**: `LangInstance` and `TranslationFn` types are now re-exported from the package entry point (`index.ts` → `dist/index.d.ts`), resolving "cannot be named without a reference to..." errors when consumers export or destructure the result of `createLang()` at module level
+
 ## [0.0.5] - 2026-06-07
 
 > **Note:** This release contains internal TypeScript and declaration-emit fixes and a cache eviction improvement. There are no breaking changes to the runtime API or public usage patterns.
